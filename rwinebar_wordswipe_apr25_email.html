@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="referrer" content="no-referrer">
+    <meta property="og:title" content="R Wine Bar Digital Word Search">
+    <meta property="og:description" content="Play this fun word search game and win a free glass of house wine or N/A drink!">
+    <meta property="og:image" content="https://static.wixstatic.com/media/9aab3f_5cd6836a1d9d4ff69e77a6bebc69f7d9~mv2.jpg">
+    <meta property="og:url" content="https://yourgame.netlify.app"> <!-- Update after Netlify deployment -->
+    <meta property="og:type" content="website">
+    <title>R Wine Bar WordGlide Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v20.0&appId=1848996382307100"></script>
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+            text-align: center;
+            background: #f5f5f5;
+            padding: 20px;
+            color: #000000;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            -webkit-user-select: none;
+            user-select: none;
+            touch-action: pan-y;
+        }
+        h1 { font-size: clamp(1.8rem, 6vw, 2.5rem); margin: 10px 0; }
+        h2 { font-size: clamp(1rem, 4vw, 1.2rem); margin-bottom: 10px; color: #666; }
+        h3 { font-size: 1.2rem; margin: 15px 0 10px; }
+        #wordList { font-size: clamp(1rem, 3vw, 1.2rem); margin-bottom: 5px; color: #333; }
+        #wordList span { margin: 0 5px; transition: color 0.3s; }
+        #wordList span.found { color: #a41f42; text-decoration: line-through; }
+        #note { font-size: clamp(0.8rem, 2vw, 1rem); color: #666; margin-bottom: 20px; }
+        .grid-container { 
+            display: flex; 
+            justify-content: center; 
+            width: 100%; 
+            overflow-x: auto; 
+            position: relative; 
+            z-index: 10;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 6px;
+            background: #a41f42;
+            padding: 10px;
+            border-radius: 15px;
+            width: 100%;
+            max-width: clamp(280px, 90vw, 400px);
+            filter: blur(5px);
+            transition: filter 0.3s;
+            touch-action: none;
+            box-sizing: border-box;
+        }
+        .grid.active { filter: none; }
+        .letter {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: clamp(10px, 2.5vw, 14px);
+            font-size: clamp(1.5rem, 5vw, 2.2rem);
+            font-weight: 700;
+            color: #000000;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            touch-action: none;
+            user-select: none;
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, transform 0.2s;
+            min-width: 0;
+        }
+        .letter.selected { background: #000000; color: #ffffff; transform: scale(1.1); animation: bounce 0.3s ease-in-out; }
+        .letter.found { background: #a41f42; color: #ffffff; animation: pulse 0.5s ease-in-out; }
+        .letter.hint { background: #ffcccb; }
+        @keyframes bounce { 0% { transform: scale(1); } 50% { transform: scale(1.15); } 100% { transform: scale(1.1); } }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+        button {
+            background: #a41f42;
+            color: #ffffff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            margin: 15px 0;
+            font-size: 1rem;
+            font-family: 'Montserrat', sans-serif;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            pointer-events: auto !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+        #startBtn { padding: 12px 24px; font-size: 1.2rem; }
+        #startBtn:disabled { background: #666; cursor: not-allowed; }
+        #helpBtn { padding: 8px 16px; font-size: 0.9rem; }
+        #joinBtn { z-index: 2001; width: 100%; }
+        .hidden { display: none !important; }
+        #logo { width: 100px; height: 100px; margin-bottom: 20px; }
+        #timer { display: flex; align-items: center; justify-content: center; font-size: 1.2rem; width: 100%; }
+        #timer::before { content: '⏱️'; margin-right: 5px; }
+        #progress, #couponInfo { width: 100%; }
+        #couponText { font-size: 0.9rem; }
+        .game-buttons { margin-top: 20px; width: 100%; display: flex; flex-direction: column; align-items: center; }
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1999;
+            display: none;
+            pointer-events: auto;
+        }
+        .popup {
+            position: fixed;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ffffff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 2000;
+            text-align: center;
+            width: 90%;
+            max-width: 300px;
+            max-height: 70vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            box-sizing: border-box;
+            pointer-events: auto;
+            display: none;
+        }
+        .popup.visible { display: block !important; }
+        .popup .close-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #a41f42;
+            background: none;
+            border: none;
+            padding: 5px;
+            z-index: 2001;
+            pointer-events: auto !important;
+            user-select: none;
+        }
+        #textPopup h3:first-child { margin-top: 30px; }
+        #sharePopup p { margin: 30px 0 15px; }
+        #losePopup p { margin: 15px 0; padding: 0; font-size: 1rem; }
+        .popup button { width: 100%; margin: 10px 0; box-sizing: border-box; pointer-events: auto !important; }
+        .popup a, .game-buttons a { text-decoration: none; }
+        .popup small { font-size: 0.8rem; color: #666; display: block; margin-top: 10px; }
+        .popup input { width: calc(100% - 20px); padding: 8px; margin: 10px 0; box-sizing: border-box; font-size: 1rem; border: 1px solid #ccc; border-radius: 5px; }
+        .popup button img { width: 20px; height: 20px; margin-right: 10px; }
+        canvas#confetti-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 999; }
+        #gameAnchor, #bookAnchor { height: 0; visibility: hidden; }
+        #contact-section { margin-top: 20px; width: 100%; text-align: center; }
+        #contact-section h3 { margin: 15px 0; }
+        #contact-section p { margin: 10px 0; }
+        #contact-section img { width: 100px; height: auto; margin: 10px 0; }
+        #contactBtn { background: #000000; color: #ffffff; border: none; padding: 10px 20px; border-radius: 25px; cursor: pointer; font-size: 1rem; font-family: 'Montserrat', sans-serif; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; margin: 15px 0; transition: background 0.3s, color 0.3s; }
+        #contactBtn:hover { background: #666666; color: #000000; }
+        body.popup-open { overflow: hidden; height: 100vh; touch-action: none; }
+        #playLimitMessage { color: #a41f42; font-size: 1rem; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div id="overlay"></div>
+    <img id="logo" src="https://static.wixstatic.com/media/9aab3f_375a3c3dd74348ef8f99a4b55cbf0c0e~mv2.png" alt="R Wine Bar Logo">
+    <h1>R Wine Bar Word Glide—Play & Win</h1>
+    <div id="gameAnchor"></div>
+    <h2>Find the words for a free treat</h2>
+    <div id="wordList">
+        <span id="word-SALAD">SALAD</span>
+        <span id="word-PANINI">PANINI</span>
+        <span id="word-PASTA">PASTA</span>
+        <span id="word-LUNCH">LUNCH</span>
+    </div>
+    <div id="note">Note: Some letters may be used twice.</div>
+    <button id="startBtn" onclick="startGame()">Get Started</button>
+    <div id="playLimitMessage" class="hidden">You’ve already played this game. One play per person allowed!</div>
+    <div id="timer">Time Left: 30s</div>
+    <div id="progress">Words Found: 0/4 | Score: 0</div>
+    <button id="helpBtn" onclick="giveHint()"><span>❤️</span> Help me out</button>
+    <div class="grid-container">
+        <div class="grid" id="wordGrid"></div>
+    </div>
+    <div id="couponInfo" class="hidden">
+        <span id="couponText"></span>
+    </div>
+    <a id="shopBtn" href="https://rwinebar.com" target="_blank" class="hidden">Visit R Wine Bar</a>
+    <div class="game-buttons">
+        <button id="shareGameBtn" onclick="showSharePopup()">Share Game</button>
+        <div id="bookAnchor"></div>
+        <a href="https://rwinebar.com/reservations" target="_blank"><button>Book Reservation</button></a>
+    </div>
+    <div id="losePopup" class="popup hidden">
+        <button class="close-btn" onclick="closeLosePopup()" aria-label="Close lose popup">✖</button>
+<br><br>
+        <p>Thanks for playing! You still get a treat—Free glass of house wine or N/A beverage, good at lunch or dinner. Close this window then sign up for texts to get your exclusive offer code.</p>
+    </div>
+    <div id="textPopup" class="popup hidden">
+        <button class="close-btn" onclick="closeTextPopup()" aria-label="Close text club popup">✖</button>
+        <h3>Get your offer code + receive updates when you join our text club!</h3>
+        <a href="https://slktxt.io/16UVW" target="_blank"><button id="joinBtn" aria-label="Join text club">Join Text Club</button></a>
+        <div id="smsFallback" class="hidden">
+            <p>SMS not opening? Enter your phone number here:</p>
+            <input type="tel" id="phoneInputFallback" placeholder="Enter your phone number" aria-label="Phone number">
+            <button id="submitFallbackBtn" onclick="submitFallbackSMS()">Submit</button>
+        </div>
+        <input type="tel" id="phoneInputWin" class="hidden" placeholder="Enter your phone number" aria-label="Phone number">
+        <button id="submitPhoneBtn" class="hidden" onclick="submitPhoneNumber()" aria-label="Submit phone number">Submit</button>
+        <small>Msg & Data Rates may apply. Reply STOP to opt out at any time. <a href="slktxt.io/16OuD" target="_blank">Terms & Conditions</a> apply.</small>
+    </div>
+    <div id="sharePopup" class="popup hidden">
+        <button class="close-btn" onclick="closeSharePopup()" aria-label="Close share popup">✖</button><br>
+        <p>Share this game with friends!</p>
+        <button id="shareFacebookBtn" onclick="shareViaFacebook()">
+            <img src="https://cdn-icons-png.flaticon.com/512/5968/5968764.png" alt="FB"> Share via Facebook
+        </button>
+        <button id="shareMessengerBtn" onclick="shareViaMessenger()">
+            <img src="https://static.wixstatic.com/media/9aab3f_1642187e759349e0ad89e872698e7444~mv2.png" alt="Messenger"> Share via Messenger
+        </button>
+        <button id="smsShareBtn" class="hidden" onclick="shareViaSMS()">
+            <img src="https://cdn-icons-png.flaticon.com/512/134/134937.png" alt="SMS"> Share via Text
+        </button>
+        <button id="shareEmailBtn" onclick="shareViaEmail()">
+            <img src="https://cdn-icons-png.flaticon.com/512/5968/5968534.png" alt="Email"> Share via Email
+        </button>
+    </div>
+    <div id="smsFallbackPopup" class="popup hidden">
+        <button class="close-btn" onclick="closeSmsFallbackPopup()" aria-label="Close SMS fallback popup">✖</button>
+        <p>Messenger not working? Share via SMS instead:</p>
+        <button id="smsShareBtnFallback" onclick="shareViaSMS()">Send via SMS</button>
+        <small>Msg & Data Rates may apply. Reply STOP to opt out. <a href="https://rwinebar.com/terms" target="_blank">Terms & Conditions</a> apply.</small>
+    </div>
+    <canvas id="confetti-canvas"></canvas>
+    <div id="contact-section">
+        <br><br><br>
+        <h3>Let's create a game for your business or organization to engage customers, increase sales, and drive lead generation!</h3>
+        <p>Contact AGE Media and Promotion, located in Sioux Falls, SD.</p>
+        <img src="https://static.wixstatic.com/media/9aab3f_c75278c2447048ce868f778f25384d60~mv2.png" alt="AGE Media Logo">
+        <br><br>
+        <a href="https://www.agemedia.pub/contact" target="_blank" id="contactBtn">Contact Us</a>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script>
+        const config = {
+            gridSize: 6,
+            words: ["SALAD", "PASTA", "PANINI", "LUNCH"],
+            gridLetters: ["S","B","Y","N","A","I","A","T","S","A","P","N","L","U","N","C","H","I","A","F","Q","Z","T","N","D","S","U","I","U","A","E","N","E","Y","J","P"],
+            wordPositions: { "SALAD": [0,6,12,18,24], "PASTA": [10,9,8,7,6], "PANINI": [35,29,23,17,11,5], "LUNCH": [12,13,14,15,16] }
+        };
+
+        const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbx_t-JXzUfrGxP6byeflQeX6v-akfHxNlLvpM_bs8Xwt02zKVq6BMecyMFS5GDn9sER/exec"; // Replace with your webhook URL
+
+        let foundWords = [], selectedLetters = "", selectedIndices = [], score = 0, timeLeft = 30, timer, isSelecting = false;
+        let gameId = Math.random().toString(36).substr(2, 9);
+        let clientId = localStorage.getItem("clientId");
+        if (!clientId) {
+            clientId = "user_" + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem("clientId", clientId);
+        }
+        let startTime, playTime = 0;
+        let userSession = {
+            totalShares: 0,
+            sharesFacebook: 0,
+            sharesSMS: 0,
+            sharesMessenger: 0,
+            sharesEmail: 0,
+            sharesX: 0,
+            bookReservationClicks: 0,
+            contactClicks: 0, // Added for Contact Us tracking
+            phoneNumber: "",
+            wordsFound: "",
+            timeOfPlay: 0,
+            deviceInfo: null,
+            textClubSignups: 0,
+            textClubFallbackSignups: 0
+        };
+        const gridContainer = document.getElementById("wordGrid");
+        const overlay = document.getElementById("overlay");
+
+        console.log("Unique View - Client ID:", clientId, "Game ID:", gameId);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const campaignId = urlParams.get("campaign") || "Spring2025";
+
+        function getDeviceInfo() {
+            const ua = navigator.userAgent;
+            let deviceType = "Unknown", os = "Unknown", browser = "Unknown";
+            if (/Mobile|Android|iPhone|iPad|iPod/i.test(ua)) {
+                deviceType = "Mobile";
+                if (/iPad/i.test(ua)) deviceType = "Tablet";
+            } else if (/Tablet/i.test(ua)) {
+                deviceType = "Tablet";
+            } else {
+                deviceType = "Desktop";
+            }
+            if (/Windows/i.test(ua)) os = "Windows";
+            else if (/Mac OS/i.test(ua)) os = "MacOS";
+            else if (/iPhone|iPad|iPod/i.test(ua)) os = "iOS";
+            else if (/Android/i.test(ua)) os = "Android";
+            else if (/Linux/i.test(ua)) os = "Linux";
+            if (/Chrome/i.test(ua)) browser = "Chrome";
+            else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = "Safari";
+            else if (/Firefox/i.test(ua)) browser = "Firefox";
+            else if (/Edge/i.test(ua)) browser = "Edge";
+            else if (/MSIE|Trident/i.test(ua)) browser = "Internet Explorer";
+            return { deviceType, os, browser, userAgent: ua };
+        }
+
+        window.onload = () => {
+            document.getElementById("progress").textContent = `Words Found: 0/${config.words.length} | Score: 0`;
+            if (navigator.userAgent.match(/Android|iPhone/i)) {
+                document.getElementById("smsShareBtn").classList.remove("hidden");
+                document.getElementById("joinBtn").classList.remove("hidden");
+            } else {
+                document.getElementById("joinBtn").classList.add("hidden");
+                document.getElementById("phoneInputWin").classList.remove("hidden");
+                document.getElementById("submitPhoneBtn").classList.remove("hidden");
+            }
+            initializeGrid();
+            FB.init({ appId: '1848996382307100', version: 'v20.0' });
+            setupPopupListeners();
+            checkJoinBtnIntegrity();
+            setupBookReservationTracking();
+            setupContactTracking(); // Added for Contact Us
+            userSession.deviceInfo = getDeviceInfo();
+            window.addEventListener("beforeunload", reportGameData);
+            window.addEventListener('resize', adjustPopupPositions);
+
+            const hasPlayed = localStorage.getItem("hasPlayed") === "true";
+            if (hasPlayed) {
+                document.getElementById("startBtn").disabled = true;
+                document.getElementById("playLimitMessage").classList.remove("hidden");
+            }
+
+            const isFirstPlay = !hasPlayed;
+            submitGameData({ views: 1, unique_views: isFirstPlay ? 1 : 0 });
+        };
+
+        function setupBookReservationTracking() {
+            const bookReservationLink = document.querySelector('a[href="https://rwinebar.com/reservations"]');
+            if (!bookReservationLink) return console.error("Book Reservation link not found in DOM");
+            bookReservationLink.addEventListener("click", handleBookReservationClick);
+            bookReservationLink.addEventListener("touchstart", handleBookReservationTouch, { passive: false });
+        }
+
+        function handleBookReservationClick(e) {
+            console.log("Book Reservation clicked");
+            userSession.bookReservationClicks++;
+            submitGameData({ book_reservation_clicks: 1 });
+        }
+
+        function handleBookReservationTouch(e) {
+            e.preventDefault();
+            console.log("Book Reservation tapped");
+            userSession.bookReservationClicks++;
+            submitGameData({ book_reservation_clicks: 1 });
+            setTimeout(() => window.open("https://rwinebar.com/reservations", "_blank"), 100);
+        }
+
+        function setupContactTracking() {
+            const contactLink = document.getElementById("contactBtn");
+            if (!contactLink) return console.error("Contact link not found in DOM");
+            contactLink.addEventListener("click", handleContactClick);
+            contactLink.addEventListener("touchstart", handleContactTouch, { passive: false });
+        }
+
+        function handleContactClick(e) {
+            console.log("Contact Us clicked");
+            userSession.contactClicks++;
+            submitGameData({ contact_clicks: 1 });
+        }
+
+        function handleContactTouch(e) {
+            e.preventDefault();
+            console.log("Contact Us tapped");
+            userSession.contactClicks++;
+            submitGameData({ contact_clicks: 1 });
+            setTimeout(() => window.open("https://www.agemedia.pub/contact", "_blank"), 100);
+        }
+
+        function submitGameData(updates) {
+            const data = {
+                timestamp: new Date().toISOString(),
+                views: updates.views || 0,
+                unique_views: updates.unique_views || 0,
+                user_id: clientId,
+                campaign_id: campaignId,
+                offer: "Free Glass of House Wine or N/A Beverage",
+                copy_code: "RWINEBARFREEGLASS",
+                shares: updates.shares || userSession.totalShares,
+                time_of_play: updates.time_of_play || userSession.timeOfPlay,
+                words_found: updates.words_found || foundWords.join(", "),
+                phone_number: updates.phone_number || userSession.phoneNumber,
+                shares_facebook: updates.shares_facebook || userSession.sharesFacebook,
+                shares_sms: updates.shares_sms || userSession.sharesSMS,
+                shares_messenger: updates.shares_messenger || userSession.sharesMessenger,
+                shares_email: updates.shares_email || userSession.sharesEmail,
+                shares_x: updates.shares_x || userSession.sharesX,
+                book_reservation_clicks: updates.book_reservation_clicks || userSession.bookReservationClicks,
+                contact_clicks: updates.contact_clicks || userSession.contactClicks, // Added
+                device_type: userSession.deviceInfo.deviceType,
+                os: userSession.deviceInfo.os,
+                browser: userSession.deviceInfo.browser,
+                user_agent: userSession.deviceInfo.userAgent
+            };
+
+            fetch(WEBHOOK_URL, {
+                method: "POST",
+                body: JSON.stringify(data),
+                headers: { "Content-Type": "application/json" },
+                mode: "no-cors"
+            })
+            .then(() => console.log("Data sent successfully:", data))
+            .catch(error => console.error("Error sending data:", error));
+        }
+
+        function reportGameData() {
+            playTime = Math.floor((Date.now() - startTime) / 1000);
+            userSession.timeOfPlay = playTime;
+            userSession.wordsFound = foundWords.join(",");
+            submitGameData({
+                time_of_play: playTime,
+                words_found: foundWords.join(","),
+                shares: userSession.totalShares,
+                shares_facebook: userSession.sharesFacebook,
+                shares_sms: userSession.sharesSMS,
+                shares_messenger: userSession.sharesMessenger,
+                shares_email: userSession.sharesEmail,
+                shares_x: userSession.sharesX,
+                phone_number: userSession.phoneNumber,
+                book_reservation_clicks: userSession.bookReservationClicks,
+                contact_clicks: userSession.contactClicks
+            });
+        }
+
+        function endGame(isFullWin) {
+            playTime = Math.floor((Date.now() - startTime) / 1000);
+            userSession.timeOfPlay = playTime;
+            userSession.wordsFound = foundWords.join(",");
+            gridContainer.style.pointerEvents = "none";
+            document.getElementById("couponInfo").classList.remove("hidden");
+            document.getElementById("couponText").textContent = "Offer code: RWINEBARFREEGLASS";
+            document.getElementById("shopBtn").classList.remove("hidden");
+            document.body.classList.add("popup-open");
+            if (isFullWin) {
+                launchConfetti();
+            } else {
+                showLosePopup();
+            }
+            localStorage.setItem("hasPlayed", "true");
+            reportGameData();
+        }
+
+        function shareViaFacebook() {
+            console.log("shareViaFacebook called - channel: facebook");
+            const shareUrl = `${window.location.href}?channel=facebook`;
+            FB.ui({
+                method: 'share',
+                href: shareUrl,
+                mobile_iframe: true,
+                quote: "I played this fun game from R Wine Bar and won a free treat! Try it out!",
+                hashtag: "#RWineBar",
+                page_id: "2440194625992457"
+            }, response => {
+                console.log("Facebook share response:", response);
+            });
+            // Increment counters immediately, as response may not reliably trigger
+            userSession.sharesFacebook++;
+            userSession.totalShares++;
+            submitGameData({ shares: userSession.totalShares, shares_facebook: userSession.sharesFacebook });
+            alert("Shared successfully!");
+        }
+
+        function shareViaMessenger() {
+            console.log("shareViaMessenger called - channel: messenger");
+            const shareUrl = `${window.location.href}?channel=messenger`;
+            const message = `I played this fun game from R Wine Bar and won a free treat! Try it out: ${shareUrl}`;
+            const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            if (isMobile) {
+                const messengerUrl = `fb-messenger://share?link=${encodeURIComponent(shareUrl)}&app_id=1848996382307100`;
+                window.location.href = messengerUrl;
+                setTimeout(() => {
+                    if (document.hidden) {
+                        console.log("Messenger app opened successfully");
+                        userSession.sharesMessenger++;
+                        userSession.totalShares++;
+                        submitGameData({ shares: userSession.totalShares, shares_messenger: userSession.sharesMessenger });
+                    } else {
+                        console.log("Messenger app not opened, falling back...");
+                        alert("Messenger not available? Try sharing via SMS or another method!");
+                        showSmsFallbackPopup();
+                    }
+                }, 2000);
+            } else {
+                FB.ui({
+                    method: 'send',
+                    link: shareUrl,
+                    redirect_uri: window.location.href
+                }, response => {
+                    console.log("Messenger share response:", response);
+                    if (response && !response.error_message) {
+                        alert("Shared successfully via Messenger!");
+                        userSession.sharesMessenger++;
+                        userSession.totalShares++;
+                        submitGameData({ shares: userSession.totalShares, shares_messenger: userSession.sharesMessenger });
+                    }
+                });
+            }
+        }
+
+        function shareViaSMS() {
+            console.log("shareViaSMS called - channel: sms");
+            const shareUrl = `${window.location.href}?channel=sms`;
+            const message = `Check out this fun digital word search game from R Wine Bar! ${shareUrl}`;
+            try {
+                window.location.href = `sms:?body=${encodeURIComponent(message)}`;
+                userSession.sharesSMS++;
+                userSession.totalShares++;
+                submitGameData({ shares: userSession.totalShares, shares_sms: userSession.sharesSMS });
+            } catch (e) {
+                console.log("SMS sharing failed, using fallback");
+                navigator.clipboard.writeText(message)
+                    .then(() => alert("Message copied to clipboard: " + message))
+                    .catch(() => alert("Please manually copy this: " + message));
+            }
+            closeSmsFallbackPopup();
+        }
+
+        function shareViaEmail() {
+    console.log("shareViaEmail called - channel: email");
+
+    const shareUrl = `${window.location.href}?channel=email`;
+    const subject = "Think you can beat my time? 🍷🧩";
+    
+    const body = `Hey there,
+
+I just played this food-themed word search from R Wine Bar & Kitchen.
+
+Think you can beat my time? 👀
+
+🔗 Play here: ${shareUrl}
+
+If you finish, there’s a little treat waiting for you! Plus, R Wine Bar & Kitchen has amazing lunch, dinner, and live music a few nights a week—let’s go soon!
+
+Let me know your score! `;
+
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+            userSession.sharesEmail++;
+            userSession.totalShares++;
+            submitGameData({ shares: userSession.totalShares, shares_email: userSession.sharesEmail });
+        }
+
+        function submitPhoneNumber() {
+            console.log("submitPhoneNumber called");
+            userSession.phoneNumber = document.getElementById("phoneInputWin").value;
+            if (userSession.phoneNumber) {
+                alert("Thanks for joining! Your secret code will be texted soon.");
+                userSession.textClubSignups++;
+                submitGameData({ phone_number: userSession.phoneNumber });
+                closeTextPopup();
+            } else {
+                alert("Please enter a phone number.");
+            }
+        }
+
+        function submitFallbackSMS() {
+            console.log("submitFallbackSMS called");
+            const phoneNumber = document.getElementById("phoneInputFallback").value;
+            if (phoneNumber) {
+                userSession.phoneNumber = phoneNumber;
+                userSession.textClubFallbackSignups++;
+                submitGameData({ phone_number: userSession.phoneNumber });
+                alert("Thanks for joining! Your promo code will be texted soon.");
+                closeTextPopup();
+                document.getElementById("phoneInputFallback").blur();
+            } else {
+                alert("Please enter a phone number.");
+            }
+        }
+
+        function initializeGrid() {
+            gridContainer.style.gridTemplateColumns = `repeat(${config.gridSize}, minmax(0, 1fr))`;
+            gridContainer.innerHTML = "";
+            config.gridLetters.forEach((letter, index) => {
+                const div = document.createElement("div");
+                div.textContent = letter;
+                div.classList.add("letter");
+                div.dataset.index = index;
+                div.addEventListener("touchstart", (e) => startSelection(letter, div, e), { passive: false });
+                div.addEventListener("touchmove", (e) => continueSelectionTouch(e), { passive: false });
+                div.addEventListener("touchend", endSelection);
+                div.addEventListener("mousedown", (e) => startSelection(letter, div, e));
+                div.addEventListener("mouseenter", (e) => continueSelection(letter, div, e));
+                div.addEventListener("mouseup", endSelection);
+                gridContainer.appendChild(div);
+            });
+        }
+
+        function startGame() {
+            const hasPlayed = localStorage.getItem("hasPlayed") === "true";
+            if (hasPlayed) {
+                alert("You’ve already played this game. One play per person allowed!");
+                return;
+            }
+            console.log("startGame called");
+            startTime = Date.now();
+            document.getElementById("startBtn").classList.add("hidden");
+            gridContainer.classList.add("active");
+            gridContainer.style.pointerEvents = "auto";
+            startTimer();
+            scrollToGrid();
+        }
+
+        function scrollToGrid() {
+            const anchor = document.getElementById("gameAnchor");
+            const offset = anchor.getBoundingClientRect().top + window.scrollY - 20;
+            window.scrollTo({ top: offset, behavior: "smooth" });
+        }
+
+        function scrollBelowShare() {
+            const anchor = document.getElementById("bookAnchor");
+            const bookBtn = document.querySelector('a[href="https://rwinebar.com/reservations"] button');
+            const offset = anchor.getBoundingClientRect().top + window.scrollY - 20;
+            window.scrollTo({ top: offset, behavior: "smooth" });
+            setTimeout(() => {
+                const bookOffset = bookBtn.getBoundingClientRect().top + window.scrollY;
+                if (bookOffset > window.scrollY + window.innerHeight) {
+                    window.scrollTo({ top: bookOffset, behavior: "smooth" });
+                }
+            }, 300);
+        }
+
+        function startTimer() {
+            timer = setInterval(() => {
+                timeLeft--;
+                document.getElementById("timer").textContent = `Time Left: ${timeLeft}s`;
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    endGame(false);
+                }
+            }, 1000);
+        }
+
+        function startSelection(letter, div, event) {
+            event.preventDefault();
+            isSelecting = true;
+            selectedLetters = letter;
+            selectedIndices = [parseInt(div.dataset.index)];
+            div.classList.remove("found");
+            div.classList.add("selected");
+        }
+
+        function continueSelection(letter, div, event) {
+            if (!isSelecting) return;
+            const newIndex = parseInt(div.dataset.index);
+            if (selectedIndices.includes(newIndex)) return;
+            const lastIndex = selectedIndices[selectedIndices.length - 1];
+            const gridSize = config.gridSize;
+            const row1 = Math.floor(lastIndex / gridSize);
+            const col1 = lastIndex % gridSize;
+            const row2 = Math.floor(newIndex / gridSize);
+            const col2 = newIndex % gridSize;
+            const deltaRow = row2 - row1;
+            const deltaCol = col2 - col1;
+            if (Math.abs(deltaRow) <= 1 && Math.abs(deltaCol) <= 1 && !(deltaRow === 0 && deltaCol === 0)) {
+                selectedLetters += letter;
+                selectedIndices.push(newIndex);
+                div.classList.remove("found");
+                div.classList.add("selected");
+            }
+        }
+
+        function continueSelectionTouch(event) {
+            if (!isSelecting) return;
+            event.preventDefault();
+            const touch = event.touches[0];
+            const element = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (element && element.classList.contains("letter")) {
+                const letter = element.textContent;
+                const newIndex = parseInt(element.dataset.index);
+                if (!selectedIndices.includes(newIndex)) {
+                    const lastIndex = selectedIndices[selectedIndices.length - 1];
+                    const gridSize = config.gridSize;
+                    const row1 = Math.floor(lastIndex / gridSize);
+                    const col1 = lastIndex % gridSize;
+                    const row2 = Math.floor(newIndex / gridSize);
+                    const col2 = newIndex % gridSize;
+                    const deltaRow = row2 - row1;
+                    const deltaCol = col2 - col1;
+                    if (Math.abs(deltaRow) <= 1 && Math.abs(deltaCol) <= 1 && !(deltaRow === 0 && deltaCol === 0)) {
+                        selectedLetters += letter;
+                        selectedIndices.push(newIndex);
+                        element.classList.remove("found");
+                        element.classList.add("selected");
+                    }
+                }
+            }
+        }
+
+        function endSelection() {
+            if (!isSelecting) return;
+            isSelecting = false;
+            const selectedElements = document.querySelectorAll(".selected");
+            const word = selectedLetters.toUpperCase();
+            const wordKey = config.words.find(w => w === word);
+            if (wordKey && !foundWords.includes(wordKey)) {
+                const expectedIndices = config.wordPositions[wordKey];
+                const allIndicesPresent = expectedIndices.every(index => selectedIndices.includes(index));
+                const isContinuousPath = selectedIndices.every((index, i) => {
+                    if (i === 0) return true;
+                    const prevIndex = selectedIndices[i - 1];
+                    const gridSize = config.gridSize;
+                    const rowDiff = Math.abs(Math.floor(index / gridSize) - Math.floor(prevIndex / gridSize));
+                    const colDiff = Math.abs((index % gridSize) - (prevIndex % gridSize));
+                    return (rowDiff <= 1 && colDiff <= 1);
+                });
+                if (allIndicesPresent && isContinuousPath) {
+                    foundWords.push(wordKey);
+                    score += wordKey.length * 10;
+                    selectedElements.forEach(el => {
+                        el.classList.remove("selected");
+                        el.classList.add("found");
+                        el.style.animation = "none";
+                        setTimeout(() => el.style.animation = "pulse 0.5s ease-in-out", 10);
+                    });
+                    document.getElementById(`word-${wordKey}`).classList.add("found");
+                    submitGameData({ words_found: foundWords.join(", ") });
+                    updateProgress();
+                } else {
+                    selectedElements.forEach(el => {
+                        el.classList.remove("selected");
+                        if (foundWords.some(w => config.wordPositions[w].includes(parseInt(el.dataset.index)))) {
+                            el.classList.add("found");
+                        }
+                    });
+                }
+            } else {
+                selectedElements.forEach(el => {
+                    el.classList.remove("selected");
+                    if (foundWords.some(w => config.wordPositions[w].includes(parseInt(el.dataset.index)))) {
+                        el.classList.add("found");
+                    }
+                });
+            }
+            selectedLetters = "";
+            selectedIndices = [];
+        }
+
+        function updateProgress() {
+            document.getElementById("progress").textContent = `Words Found: ${foundWords.length}/${config.words.length} | Score: ${score}`;
+            if (foundWords.length === config.words.length) {
+                clearInterval(timer);
+                endGame(true);
+            }
+        }
+
+        function launchConfetti() {
+            const duration = 1500;
+            const end = Date.now() + duration;
+            const colors = ['#a41f42', '#ffffff', '#ffcccb', '#000000'];
+
+            function frame() {
+                confetti({
+                    particleCount: 7,
+                    angle: 60,
+                    spread: 55,
+                    origin: { x: 0, y: 0.6 },
+                    colors: colors
+                });
+                confetti({
+                    particleCount: 7,
+                    angle: 120,
+                    spread: 55,
+                    origin: { x: 1, y: 0.6 },
+                    colors: colors
+                });
+                if (Date.now() < end) {
+                    requestAnimationFrame(frame);
+                } else {
+                    showTextPopup();
+                }
+            }
+            frame();
+        }
+
+        function adjustPopupPositions() {
+            const popups = document.querySelectorAll('.popup.visible');
+            popups.forEach(popup => {
+                popup.style.top = '10%';
+                popup.style.left = '50%';
+                popup.style.transform = 'translateX(-50%)';
+            });
+        }
+
+        function showLosePopup() {
+            console.log("showLosePopup called");
+            const popup = document.getElementById("losePopup");
+            overlay.style.display = "block";
+            popup.classList.remove("hidden");
+            popup.classList.add("visible");
+            document.body.classList.add("popup-open");
+            adjustPopupPositions();
+        }
+
+        function closeLosePopup() {
+            console.log("closeLosePopup called");
+            const popup = document.getElementById("losePopup");
+            overlay.style.display = "none";
+            popup.classList.add("hidden");
+            popup.classList.remove("visible");
+            document.body.classList.remove("popup-open");
+            setTimeout(() => showTextPopup(), 1500);
+        }
+
+        function showTextPopup() {
+            console.log("showTextPopup called");
+            const popup = document.getElementById("textPopup");
+            overlay.style.display = "block";
+            popup.classList.remove("hidden");
+            popup.classList.add("visible");
+            document.body.classList.add("popup-open");
+            checkJoinBtnIntegrity();
+            setupPopupListeners();
+            adjustPopupPositions();
+            if (navigator.userAgent.match(/Android|iPhone/i)) {
+                setTimeout(() => {
+                    if (!document.hidden) {
+                        console.log("SMS app likely didn’t open, showing fallback");
+                        document.getElementById("smsFallback").classList.remove("hidden");
+                    } else {
+                        console.log("SMS app likely opened");
+                    }
+                }, 1500);
+            }
+        }
+
+        function closeTextPopup() {
+            console.log("closeTextPopup called");
+            const popup = document.getElementById("textPopup");
+            overlay.style.display = "none";
+            popup.classList.add("hidden");
+            popup.classList.remove("visible");
+            document.body.classList.remove("popup-open");
+            document.getElementById("phoneInputFallback").blur();
+            setTimeout(() => showSharePopup(), 1500);
+        }
+
+        function showSmsFallbackPopup() {
+            console.log("showSmsFallbackPopup called");
+            const popup = document.getElementById("smsFallbackPopup");
+            overlay.style.display = "block";
+            popup.classList.remove("hidden");
+            popup.classList.add("visible");
+            document.body.classList.add("popup-open");
+            adjustPopupPositions();
+        }
+
+        function closeSmsFallbackPopup() {
+            console.log("closeSmsFallbackPopup called");
+            const popup = document.getElementById("smsFallbackPopup");
+            overlay.style.display = "none";
+            popup.classList.add("hidden");
+            popup.classList.remove("visible");
+            document.body.classList.remove("popup-open");
+        }
+
+        function showSharePopup() {
+            console.log("showSharePopup called");
+            const popup = document.getElementById("sharePopup");
+            overlay.style.display = "block";
+            popup.classList.remove("hidden");
+            popup.classList.add("visible");
+            document.body.classList.add("popup-open");
+            setupPopupListeners();
+            adjustPopupPositions();
+        }
+
+        function closeSharePopup() {
+            console.log("closeSharePopup called");
+            const popup = document.getElementById("sharePopup");
+            overlay.style.display = "none";
+            popup.classList.add("hidden");
+            popup.classList.remove("visible");
+            document.body.classList.remove("popup-open");
+            setTimeout(() => scrollBelowShare(), 100);
+        }
+
+        function giveHint() {
+            console.log("giveHint called");
+            const remainingWords = config.words.filter(word => !foundWords.includes(word));
+            if (remainingWords.length > 0) {
+                const nextWord = remainingWords[0];
+                const indices = config.wordPositions[nextWord];
+                const hintElements = document.querySelectorAll(".letter");
+                hintElements.forEach(el => el.classList.remove("hint"));
+                indices.forEach(index => {
+                    if (index >= 0 && index < config.gridLetters.length) hintElements[index].classList.add("hint");
+                });
+                setTimeout(() => hintElements.forEach(el => el.classList.remove("hint")), 2000);
+            }
+        }
+
+        function checkJoinBtnIntegrity() {
+            const joinBtn = document.getElementById("joinBtn");
+            if (!joinBtn) return console.error("joinBtn not found in DOM");
+            const parent = joinBtn.parentElement;
+            if (parent.tagName !== "A") {
+                console.warn("joinBtn not wrapped in <a>, fixing...");
+                const link = document.createElement("a");
+                link.href = "https://slktxt.io/16UVW";
+                link.target = "_blank";
+                joinBtn.parentNode.insertBefore(link, joinBtn);
+                link.appendChild(joinBtn);
+            }
+            console.log("JoinBtn HTML:", joinBtn.outerHTML);
+        }
+
+        function setupPopupListeners() {
+            console.log("Setting up popup listeners...");
+            const textCloseBtn = document.querySelector("#textPopup .close-btn");
+            const shareCloseBtn = document.querySelector("#sharePopup .close-btn");
+            const loseCloseBtn = document.querySelector("#losePopup .close-btn");
+
+            if (!textCloseBtn) console.error("textPopup close-btn not found");
+            if (!shareCloseBtn) console.error("sharePopup close-btn not found");
+            if (!loseCloseBtn) console.error("losePopup close-btn not found");
+
+            if (textCloseBtn) {
+                textCloseBtn.removeEventListener("click", closeTextPopup);
+                textCloseBtn.removeEventListener("touchstart", closeTextPopup);
+                textCloseBtn.addEventListener("click", closeTextPopup, { capture: true });
+                textCloseBtn.addEventListener("touchstart", closeTextPopup, { passive: false, capture: true });
+            }
+
+            if (shareCloseBtn) {
+                shareCloseBtn.removeEventListener("click", closeSharePopup);
+                shareCloseBtn.removeEventListener("touchstart", closeSharePopup);
+                shareCloseBtn.addEventListener("click", closeSharePopup, { capture: true });
+                shareCloseBtn.addEventListener("touchstart", closeSharePopup, { passive: false, capture: true });
+            }
+
+            if (loseCloseBtn) {
+                loseCloseBtn.removeEventListener("click", closeLosePopup);
+                loseCloseBtn.removeEventListener("touchstart", closeLosePopup);
+                loseCloseBtn.addEventListener("click", closeLosePopup, { capture: true });
+                loseCloseBtn.addEventListener("touchstart", closeLosePopup, { passive: false, capture: true });
+            }
+
+            console.log("Listeners attached - textCloseBtn:", !!textCloseBtn, "shareCloseBtn:", !!shareCloseBtn, "loseCloseBtn:", !!loseCloseBtn);
+        }
+    </script>
+</body>
+</html>
+
